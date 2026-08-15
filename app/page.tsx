@@ -68,6 +68,14 @@ const monthLabels = [
   "AGO · 2026",
 ];
 
+const storyChapters = [
+  { id: "inicio", label: "Inicio", number: "01" },
+  { id: "universo", label: "Universo", number: "02" },
+  { id: "latido", label: "Latido", number: "03" },
+  { id: "recuerdos", label: "Recuerdos", number: "04" },
+  { id: "siempre", label: "Siempre", number: "05" },
+];
+
 const lottieHeart = {
   v: "5.10.0",
   fr: 60,
@@ -582,7 +590,10 @@ export default function Home() {
   const rootRef = useRef<HTMLElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const touchStartRef = useRef(0);
   const [entered, setEntered] = useState(false);
+  const [activeSection, setActiveSection] = useState("inicio");
+  const [selectedMemory, setSelectedMemory] = useState<number | null>(null);
 
   const memories = useMemo(
     () =>
@@ -611,6 +622,47 @@ export default function Home() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  useEffect(() => {
+    const sections = storyChapters
+      .map(({ id }) => document.getElementById(id))
+      .filter((section): section is HTMLElement => section !== null);
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (visible?.target.id) setActiveSection(visible.target.id);
+      },
+      { rootMargin: "-28% 0px -46%", threshold: [0, 0.15, 0.35, 0.6] },
+    );
+
+    sections.forEach((section) => observer.observe(section));
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (selectedMemory === null) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelectedMemory(null);
+      if (event.key === "ArrowLeft") {
+        setSelectedMemory((current) => current === null ? null : (current - 1 + memories.length) % memories.length);
+      }
+      if (event.key === "ArrowRight") {
+        setSelectedMemory((current) => current === null ? null : (current + 1) % memories.length);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [selectedMemory, memories.length]);
 
   useEffect(() => {
     if (!entered || !rootRef.current) return;
@@ -691,6 +743,14 @@ export default function Home() {
     }
   };
 
+  const previousMemory = () => {
+    setSelectedMemory((current) => current === null ? null : (current - 1 + memories.length) % memories.length);
+  };
+
+  const nextMemory = () => {
+    setSelectedMemory((current) => current === null ? null : (current + 1) % memories.length);
+  };
+
   return (
     <main ref={rootRef} className="experience">
       <audio ref={audioRef} src="/audio/heaven-can-wait.mp3" preload="metadata" loop />
@@ -718,8 +778,20 @@ export default function Home() {
 
       <header className="topbar">
         <a href="#inicio" className="monogram" aria-label="Ir al inicio">J·W</a>
-        <span>365 / ∞</span>
-        <a href="#recuerdos">Recuerdos</a>
+        <nav className="story-nav" aria-label="Capítulos de nuestra historia">
+          {storyChapters.map((chapter) => (
+            <a
+              key={chapter.id}
+              href={`#${chapter.id}`}
+              className={activeSection === chapter.id ? "is-active" : ""}
+              aria-current={activeSection === chapter.id ? "location" : undefined}
+            >
+              <i>{chapter.number}</i>
+              <span>{chapter.label}</span>
+            </a>
+          ))}
+        </nav>
+        <a href="#recuerdos" className="archive-link">365 / ∞</a>
       </header>
 
       <section id="inicio" className="hero section-shell">
@@ -763,7 +835,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="orbit-gallery section-shell">
+      <section id="universo" className="orbit-gallery section-shell">
         <div className="section-heading" data-reveal>
           <p className="eyebrow">NUESTRO UNIVERSO</p>
           <h2>Dos vidas.<br />La misma órbita.</h2>
@@ -802,7 +874,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="heart-section section-shell">
+      <section id="latido" className="heart-section section-shell">
         <div className="heart-copy" data-reveal>
           <p className="eyebrow">UN LATIDO COMPARTIDO</p>
           <h2>No fue suerte.<br />Fue encontrarnos.</h2>
@@ -828,6 +900,15 @@ export default function Home() {
             <figure key={memory.src} className={`memory-card shape-${index % 5}`}>
               <div className="memory-image">
                 <img src={memory.src} alt={`${memory.chapter}, recuerdo de Juan y Walewska`} loading="lazy" />
+                <button
+                  type="button"
+                  className="memory-open"
+                  onClick={() => setSelectedMemory(index)}
+                  aria-label={`Abrir ${memory.chapter}`}
+                >
+                  <span>Ver recuerdo</span>
+                  <b>↗</b>
+                </button>
               </div>
               <figcaption>
                 <span>{memory.month}</span>
@@ -839,7 +920,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="promise section-shell">
+      <section id="siempre" className="promise section-shell">
         <div className="promise-glow" aria-hidden="true" />
         <div className="promise-content" data-reveal>
           <HeartLottie animationData={lottieHeart} loop className="promise-lottie" aria-hidden="true" />
@@ -864,6 +945,63 @@ export default function Home() {
         <p>Hecho con amor para el primero de muchos.</p>
         <span>2025 — 2026</span>
       </footer>
+
+      {selectedMemory !== null && (
+        <div
+          className="memory-lightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Recuerdo ${selectedMemory + 1} de ${memories.length}`}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setSelectedMemory(null);
+          }}
+          onTouchStart={(event) => {
+            touchStartRef.current = event.changedTouches[0]?.clientX ?? 0;
+          }}
+          onTouchEnd={(event) => {
+            const distance = (event.changedTouches[0]?.clientX ?? 0) - touchStartRef.current;
+            if (distance > 55) previousMemory();
+            if (distance < -55) nextMemory();
+          }}
+        >
+          <div className="lightbox-topbar">
+            <span>J·W / ARCHIVO</span>
+            <strong>{String(selectedMemory + 1).padStart(2, "0")} <i>/</i> {memories.length}</strong>
+            <button type="button" onClick={() => setSelectedMemory(null)} aria-label="Cerrar recuerdo">×</button>
+          </div>
+
+          <button type="button" className="lightbox-arrow is-previous" onClick={previousMemory} aria-label="Recuerdo anterior">←</button>
+          <figure className="lightbox-figure">
+            <div className="lightbox-image-wrap">
+              <img
+                key={memories[selectedMemory].src}
+                src={memories[selectedMemory].src}
+                alt={`${memories[selectedMemory].chapter}, recuerdo de Juan y Walewska`}
+              />
+            </div>
+            <figcaption>
+              <span>{memories[selectedMemory].month}</span>
+              <h3>{memories[selectedMemory].chapter}</h3>
+              <p>Un instante de nuestra historia.</p>
+            </figcaption>
+          </figure>
+          <button type="button" className="lightbox-arrow is-next" onClick={nextMemory} aria-label="Siguiente recuerdo">→</button>
+
+          <div className="lightbox-strip" aria-label="Elegir otro recuerdo">
+            {memories.map((memory, index) => (
+              <button
+                key={memory.src}
+                type="button"
+                className={selectedMemory === index ? "is-active" : ""}
+                onClick={() => setSelectedMemory(index)}
+                aria-label={`Ver recuerdo ${index + 1}`}
+              >
+                <img src={memory.src} alt="" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {entered && <MusicPlayer audioRef={audioRef} />}
     </main>
