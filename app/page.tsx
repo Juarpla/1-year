@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ComponentType } from "react";
+import type { ComponentType, PointerEvent as ReactPointerEvent } from "react";
 import {
   ArcRotateCamera,
   Color3,
@@ -74,6 +74,27 @@ const storyChapters = [
   { id: "latido", label: "Latido", number: "03" },
   { id: "recuerdos", label: "Recuerdos", number: "04" },
   { id: "siempre", label: "Siempre", number: "05" },
+];
+
+const orbitMemories = [
+  {
+    src: "/photos/memory-08.jpg",
+    caption: "La complicidad",
+    alt: "Juan y Walewska compartiendo un momento de complicidad",
+    memoryIndex: 7,
+  },
+  {
+    src: "/photos/memory-16.jpg",
+    caption: "Siempre nosotros",
+    alt: "Un momento especial de Juan y Walewska",
+    memoryIndex: 15,
+  },
+  {
+    src: "/photos/memory-21.jpg",
+    caption: "La vida contigo",
+    alt: "Juan y Walewska celebrando juntos",
+    memoryIndex: 20,
+  },
 ];
 
 const lottieHeart = {
@@ -591,8 +612,12 @@ export default function Home() {
   const progressRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const touchStartRef = useRef(0);
+  const orbitDragStartRef = useRef(0);
+  const orbitDraggingRef = useRef(false);
+  const orbitMovedRef = useRef(false);
   const [entered, setEntered] = useState(false);
   const [activeSection, setActiveSection] = useState("inicio");
+  const [orbitIndex, setOrbitIndex] = useState(1);
   const [selectedMemory, setSelectedMemory] = useState<number | null>(null);
 
   const memories = useMemo(
@@ -704,20 +729,6 @@ export default function Home() {
           });
         });
 
-        gsap.to(".orbit-photo.is-left", {
-          yPercent: -16,
-          rotate: -8,
-          scrollTrigger: { trigger: ".orbit-gallery", start: "top bottom", end: "bottom top", scrub: 1.2 },
-        });
-        gsap.to(".orbit-photo.is-right", {
-          yPercent: 18,
-          rotate: 9,
-          scrollTrigger: { trigger: ".orbit-gallery", start: "top bottom", end: "bottom top", scrub: 1.2 },
-        });
-        gsap.to(".orbit-photo.is-center", {
-          scale: 1.08,
-          scrollTrigger: { trigger: ".orbit-gallery", start: "top 80%", end: "bottom 30%", scrub: 1.2 },
-        });
         gsap.to(".manifesto-word", {
           backgroundPositionX: "0%",
           stagger: 0.18,
@@ -749,6 +760,64 @@ export default function Home() {
 
   const nextMemory = () => {
     setSelectedMemory((current) => current === null ? null : (current + 1) % memories.length);
+  };
+
+  const previousOrbit = () => {
+    setOrbitIndex((current) => (current - 1 + orbitMemories.length) % orbitMemories.length);
+  };
+
+  const nextOrbit = () => {
+    setOrbitIndex((current) => (current + 1) % orbitMemories.length);
+  };
+
+  const getOrbitSlot = (index: number) => {
+    const distance = (index - orbitIndex + orbitMemories.length) % orbitMemories.length;
+    if (distance === 0) return "is-center";
+    if (distance === 1) return "is-right";
+    return "is-left";
+  };
+
+  const startOrbitDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    if ((event.target as HTMLElement).closest(".orbit-controls")) return;
+    orbitDragStartRef.current = event.clientX;
+    orbitDraggingRef.current = true;
+    orbitMovedRef.current = false;
+    event.currentTarget.classList.add("is-dragging");
+  };
+
+  const moveOrbitDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!orbitDraggingRef.current) return;
+    const distance = event.clientX - orbitDragStartRef.current;
+    if (Math.abs(distance) > 6) {
+      orbitMovedRef.current = true;
+      if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }
+    }
+    event.currentTarget.style.setProperty("--drag-shift", `${distance * 0.18}px`);
+    event.currentTarget.style.setProperty("--drag-angle", `${distance * 0.018}deg`);
+  };
+
+  const finishOrbitDrag = (event: ReactPointerEvent<HTMLDivElement>, commit = true) => {
+    if (!orbitDraggingRef.current) return;
+    const distance = event.clientX - orbitDragStartRef.current;
+    orbitDraggingRef.current = false;
+
+    if (commit && Math.abs(distance) > 45) {
+      if (distance < 0) nextOrbit();
+      else previousOrbit();
+    }
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    event.currentTarget.classList.remove("is-dragging");
+    event.currentTarget.style.setProperty("--drag-shift", "0px");
+    event.currentTarget.style.setProperty("--drag-angle", "0deg");
+    window.setTimeout(() => {
+      orbitMovedRef.current = false;
+    }, 0);
   };
 
   return (
@@ -841,21 +910,61 @@ export default function Home() {
           <h2>Dos vidas.<br />La misma órbita.</h2>
           <p>Todo lo extraordinario empezó con algo muy simple: coincidir.</p>
         </div>
-        <div className="orbit-stage" aria-label="Selección de recuerdos">
-          <figure className="orbit-photo is-left">
-            <img src="/photos/memory-08.jpg" alt="Juan y Walewska en uno de sus recuerdos" />
-            <figcaption>La complicidad</figcaption>
-          </figure>
-          <figure className="orbit-photo is-center">
-            <img src="/photos/memory-16.jpg" alt="Un momento especial de Juan y Walewska" />
-            <figcaption>Siempre nosotros</figcaption>
-          </figure>
-          <figure className="orbit-photo is-right">
-            <img src="/photos/memory-21.jpg" alt="Juan y Walewska celebrando juntos" />
-            <figcaption>La vida contigo</figcaption>
-          </figure>
+        <div
+          className="orbit-stage"
+          aria-label="Carrusel 3D de recuerdos. Arrastra horizontalmente para girarlo."
+          tabIndex={0}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowLeft") {
+              event.preventDefault();
+              previousOrbit();
+            }
+            if (event.key === "ArrowRight") {
+              event.preventDefault();
+              nextOrbit();
+            }
+          }}
+          onPointerDown={startOrbitDrag}
+          onPointerMove={moveOrbitDrag}
+          onPointerUp={(event) => finishOrbitDrag(event)}
+          onPointerCancel={(event) => finishOrbitDrag(event, false)}
+        >
+          {orbitMemories.map((memory, index) => {
+            const isSelected = index === orbitIndex;
+            return (
+              <button
+                type="button"
+                key={memory.src}
+                className={`orbit-photo ${getOrbitSlot(index)}`}
+                aria-pressed={isSelected}
+                aria-label={isSelected
+                  ? `${memory.caption}. Abrir recuerdo en pantalla completa.`
+                  : `${memory.caption}. Traer foto al frente.`}
+                onClick={() => {
+                  if (orbitMovedRef.current) {
+                    orbitMovedRef.current = false;
+                    return;
+                  }
+                  if (isSelected) setSelectedMemory(memory.memoryIndex);
+                  else setOrbitIndex(index);
+                }}
+              >
+                <img src={memory.src} alt={memory.alt} draggable={false} />
+                <span className="orbit-caption">{memory.caption}</span>
+              </button>
+            );
+          })}
           <div className="orbit-line line-a" aria-hidden="true" />
           <div className="orbit-line line-b" aria-hidden="true" />
+          <div className="orbit-controls" aria-label="Controles del carrusel">
+            <button type="button" onClick={previousOrbit} aria-label="Foto anterior">←</button>
+            <span aria-hidden="true">
+              <strong>{String(orbitIndex + 1).padStart(2, "0")}</strong> / {String(orbitMemories.length).padStart(2, "0")}
+            </span>
+            <button type="button" onClick={nextOrbit} aria-label="Foto siguiente">→</button>
+          </div>
+          <p className="orbit-drag-hint" aria-hidden="true">Arrastra para girar · clic para elegir</p>
+          <p className="sr-only" aria-live="polite">Foto al frente: {orbitMemories[orbitIndex].caption}</p>
         </div>
       </section>
 
